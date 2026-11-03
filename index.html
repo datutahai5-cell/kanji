@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小学校 漢字練習プリント＆テスト作成アプリ (クラウド対応)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2pdf.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        /* 印刷スタイル最適化 */
+        @media print {
+            body {
+                background: white !important;
+                color: black !important;
+                font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-container {
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+            /* 印刷時の枠線を太め・濃く調整 */
+            .print-container * {
+                border-color: #000000 !important;
+            }
+            /* A4印刷設定 */
+            @page {
+                size: A4 portrait;
+                margin: 8mm 10mm;
+            }
+            /* 改ページ制御 */
+            .page-break {
+                page-break-after: always;
+                break-after: page;
+            }
+        }
+
+        /* 漢字セル等のフォント・スタイルの微調整 */
+        .kanji-cell {
+            font-family: "Hiragino Mincho ProN", "Yu Mincho", "MS Mincho", serif;
+            font-size: 1.75rem;
+            font-weight: bold;
+        }
+
+        /* 練習グリッドセル（点線は削除） */
+        .practice-grid-cell {
+            position: relative;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 flex flex-col">
+
+    <!-- 通知トースト -->
+    <div id="toast" class="fixed top-4 right-4 z-50 bg-slate-800 text-white px-4 py-2.5 rounded-lg shadow-xl text-sm font-semibold transition-all duration-300 opacity-0 pointer-events-none transform translate-y-[-10px] flex items-center gap-2">
+        <span id="toast-message">メッセージ</span>
+    </div>
+
+    <!-- ナビゲーションバー（印刷非表示） -->
+    <header class="bg-indigo-700 text-white shadow-md no-print">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center gap-2">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide">漢字プリント自動作成アプリ</h1>
+                    <span id="sync-status-badge" class="text-[10px] bg-indigo-800 text-indigo-200 px-2 py-0.5 rounded-full inline-block mt-0.5">クラウド同期: 未設定</span>
+                </div>
+            </div>
+
+            <!-- アクションボタン群 -->
+            <div class="flex flex-wrap items-center gap-2">
+                <button onclick="openApiConfigModal()" class="bg-indigo-800 hover:bg-indigo-900 text-indigo-100 px-3 py-2 rounded-lg font-semibold text-xs flex items-center gap-1 shadow transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    スプレッドシート設定
+                </button>
+                <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-1.5 shadow transition text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h14z"></path></svg>
+                    印刷
+                </button>
+                <button onclick="downloadPDF()" class="bg-indigo-600 hover:bg-indigo-800 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-1.5 shadow transition text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    PDF保存
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- 左側：操作＆データ入力パネル（印刷非表示） -->
+        <section class="lg:col-span-4 space-y-5 no-print">
+            
+            <!-- タブ切替 -->
+            <div class="bg-white p-1.5 rounded-xl shadow-sm border border-slate-200 flex text-sm font-bold">
+                <button id="tab-practice-btn" onclick="switchTab('practice')" class="flex-1 py-2 rounded-lg bg-indigo-600 text-white transition text-center">① 練習プリント (30問)</button>
+                <button id="tab-test-btn" onclick="switchTab('test')" class="flex-1 py-2 rounded-lg text-slate-600 hover:bg-slate-100 transition text-center">② 漢字テスト (10問)</button>
+            </div>
+
+            <!-- モード1：練習プリント設定 -->
+            <div id="panel-practice" class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                <h2 class="font-bold text-lg text-slate-800 border-b pb-2 flex justify-between items-center">
+                    <span>漢字データの入力</span>
+                    <span id="data-count-badge" class="text-xs bg-indigo-100 text-indigo-700 font-bold px-2.5 py-1 rounded-full">30問中 30問</span>
+                </h2>
+
+                <!-- 保存＆呼び出しセクション -->
+                <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 space-y-3">
+                    <div class="flex items-center justify-between text-xs font-bold text-indigo-900">
+                        <div class="flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                            <span>クラウド保存＆読み込み</span>
+                        </div>
+                        <button onclick="fetchCloudData()" title="手動更新" class="text-indigo-600 hover:text-indigo-800 text-[11px] underline flex items-center gap-1">
+                            🔄 最新を取得
+                        </button>
+                    </div>
+                    
+                    <!-- 学年選択 & プリント名入力 -->
+                    <div class="space-y-2">
+                        <div class="flex gap-2">
+                            <select id="save-grade-select" class="w-1/3 text-xs font-semibold border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                                <option value="1年生">1年生</option>
+                                <option value="2年生">2年生</option>
+                                <option value="3年生" selected>3年生</option>
+                                <option value="4年生">4年生</option>
+                                <option value="5年生">5年生</option>
+                                <option value="6年生">6年生</option>
+                                <option value="その他">その他</option>
+                            </select>
+                            <input type="text" id="save-title-input" placeholder="プリント名 (例: 秋の漢字)" class="flex-1 text-xs border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                        </div>
+                        <button onclick="saveCurrentKanjiSet()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                            クラウドに保存する
+                        </button>
+                    </div>
+
+                    <!-- 保存済み一覧（学年フォルダ切替対応） -->
+                    <div id="saved-list-container" class="mt-3 pt-3 border-t border-indigo-100 space-y-2.5">
+                        <div class="flex justify-between items-center">
+                            <label class="block text-[11px] font-bold text-slate-600">保存済みプリント一覧</label>
+                            <span id="total-saved-badge" class="text-[10px] font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">全0件</span>
+                        </div>
+                        
+                        <!-- 学年フォルダフィルタータブ -->
+                        <div class="flex flex-wrap gap-1 bg-slate-200/70 p-1 rounded-lg text-[11px]" id="grade-filter-tabs">
+                            <button onclick="filterGrade('ALL')" class="grade-tab-btn px-2 py-0.5 rounded bg-indigo-600 text-white font-bold transition">すべて</button>
+                            <button onclick="filterGrade('1年生')" class="grade-tab-btn px-1.5 py-0.5 rounded text-slate-600 hover:bg-slate-300 transition">1年</button>
+                            <button onclick="filterGrade('2年生')" class="grade-tab-btn px-1.5 py-0.5 rounded text-slate-600 hover:bg-slate-300 transition">2年</button>
+                            <button onclick="filterGrade('3年生')" class="grade-tab-btn px-1.5 py-0.5 rounded text-slate-600 hover:bg-slate-300 transition">3年</button>
+                            <button onclick="filterGrade('4年生')" class="grade-tab-btn px-1.5 py-0.5 rounded text-slate-600 hover:bg-slate-300 transition">4年</button>
+                            <button onclick="filterGrade('5年生')" class="grade-tab-btn px-1.5 py-0.5 rounded text-slate-600 hover:bg-slate-300 transition">5年</button>
+                            <button onclick="filterGrade('6年生')" class="grade-tab-btn px-1.5 py-0.5 rounded text-slate-600 hover:bg-slate-300 transition">6年</button>
+                        </div>
+
+                        <!-- ドロップダウン選択＆操作ボタン -->
+                        <div class="flex gap-1.5">
+                            <select id="saved-kanji-select" class="flex-1 text-xs border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-medium">
+                            </select>
+                            <button onclick="loadSelectedKanjiSet()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-2.5 py-1.5 rounded-lg transition shadow-sm">開く</button>
+                            <button onclick="deleteSelectedKanjiSet()" class="bg-red-500 hover:bg-red-600 text-white font-bold text-xs px-2.5 py-1.5 rounded-lg transition shadow-sm">削除</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 順序シャッフルボタン -->
+                <button onclick="shuffleKanji()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition text-sm shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    漢字の順番をシャッフルする
+                </button>
+
+                <!-- テキスト入力欄のガイダンス -->
+                <div class="space-y-1.5">
+                    <div class="flex justify-between items-center text-xs">
+                        <label class="font-bold text-slate-700">一括データ入力</label>
+                        <span class="text-slate-400">1行に「漢字,よみ」を入力</span>
+                    </div>
+                    <textarea id="bulk-input" rows="11" oninput="parseBulkInput()" placeholder="感想,かんそう&#10;写真,しゃしん&#10;列車,れっしゃ" class="w-full font-mono text-sm border border-slate-300 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed shadow-inner bg-slate-50/50 focus:bg-white transition"></textarea>
+                </div>
+            </div>
+
+            <!-- モード2：テスト設定 -->
+            <div id="panel-test" class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4 hidden">
+                <h2 class="font-bold text-lg text-slate-800 border-b pb-2">漢字テスト生成設定</h2>
+
+                <p class="text-sm text-slate-600 leading-relaxed">
+                    現在の練習プリントに入力されている漢字（最大30問）から<strong class="text-indigo-600">ランダムで10問</strong>を選出してテストを作成します。
+                </p>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">テスト形式</label>
+                    <select id="test-type" onchange="renderTest()" class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white font-medium">
+                        <option value="write">書き取りテスト（読みから漢字を書く）</option>
+                        <option value="read">読み取りテスト（漢字から読みを書く）</option>
+                    </select>
+                </div>
+
+                <button onclick="generateRandomTest()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition shadow">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    10問をランダム再抽出する
+                </button>
+            </div>
+
+        </section>
+
+        <!-- 右側：プレビュー＆印刷領域 -->
+        <section class="lg:col-span-8 flex flex-col items-center gap-8">
+            
+            <!-- 練習プリント (A4イメージ 2枚構成) -->
+            <div id="preview-practice" class="w-full max-w-[210mm] space-y-8">
+                
+                <!-- 1ページ目（1〜15問） -->
+                <div class="print-container bg-white border border-slate-300 shadow-lg p-6 rounded-sm w-full min-h-[285mm] flex flex-col justify-between page-break">
+                    <div>
+                        <!-- タイトル・名前欄 -->
+                        <div class="mb-4">
+                            <div class="border-[2.5px] border-slate-900 bg-slate-100 py-2.5 text-center mb-3 flex justify-between items-center px-4">
+                                <span class="text-sm font-bold text-slate-700">プリント (1 / 2)</span>
+                                <h1 class="text-2xl font-bold tracking-widest text-slate-900">漢字練習プリント</h1>
+                                <span class="w-16"></span>
+                            </div>
+                            <div class="flex justify-end items-center pr-2 text-base font-bold text-slate-900">
+                                <span>名前（　　　　　　　　　　　　　　）</span>
+                            </div>
+                        </div>
+
+                        <!-- 15問表 -->
+                        <div class="border-[2.5px] border-slate-900 text-sm">
+                            <div class="grid grid-cols-12 bg-slate-200 font-bold text-center border-b-[2.5px] border-slate-900 py-2 text-xs text-slate-900">
+                                <div class="col-span-1 border-r-[1.5px] border-slate-700">番</div>
+                                <div class="col-span-2 border-r-[1.5px] border-slate-700">漢字</div>
+                                <div class="col-span-2 border-r-[1.5px] border-slate-700">読み</div>
+                                <div class="col-span-7 flex justify-around">
+                                    <span>練習 ①</span>
+                                    <span>練習 ②</span>
+                                    <span>練習 ③</span>
+                                </div>
+                            </div>
+                            <div id="practice-page-1" class="divide-y-[1.5px] divide-slate-800"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2ページ目（16〜30問） -->
+                <div class="print-container bg-white border border-slate-300 shadow-lg p-6 rounded-sm w-full min-h-[285mm] flex flex-col justify-between">
+                    <div>
+                        <div class="mb-4">
+                            <div class="border-[2.5px] border-slate-900 bg-slate-100 py-2.5 text-center mb-3 flex justify-between items-center px-4">
+                                <span class="text-sm font-bold text-slate-700">プリント (2 / 2)</span>
+                                <h1 class="text-2xl font-bold tracking-widest text-slate-900">漢字練習プリント</h1>
+                                <span class="w-16"></span>
+                            </div>
+                            <div class="flex justify-end items-center pr-2 text-base font-bold text-slate-900">
+                                <span>名前（　　　　　　　　　　　　　　）</span>
+                            </div>
+                        </div>
+
+                        <div class="border-[2.5px] border-slate-900 text-sm">
+                            <div class="grid grid-cols-12 bg-slate-200 font-bold text-center border-b-[2.5px] border-slate-900 py-2 text-xs text-slate-900">
+                                <div class="col-span-1 border-r-[1.5px] border-slate-700">番</div>
+                                <div class="col-span-2 border-r-[1.5px] border-slate-700">漢字</div>
+                                <div class="col-span-2 border-r-[1.5px] border-slate-700">読み</div>
+                                <div class="col-span-7 flex justify-around">
+                                    <span>練習 ①</span>
+                                    <span>練習 ②</span>
+                                    <span>練習 ③</span>
+                                </div>
+                            </div>
+                            <div id="practice-page-2" class="divide-y-[1.5px] divide-slate-800"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 漢字テスト (A4イメージ) -->
+            <div id="preview-test" class="print-container bg-white border border-slate-300 shadow-lg p-6 rounded-sm w-full max-w-[210mm] min-h-[270mm] hidden">
+                <div class="mb-6 flex justify-between items-end border-b-[2.5px] border-slate-900 pb-3">
+                    <div>
+                        <h1 class="text-3xl font-bold tracking-wider text-slate-900">漢字テスト (10問)</h1>
+                        <p id="test-subtitle" class="text-sm text-slate-700 mt-1 font-semibold">※ひらがなを見て、かん字をかきましょう。</p>
+                    </div>
+                    <div class="text-lg font-bold pb-1 text-slate-900">
+                        名前（　　　　　　　　　　　）
+                    </div>
+                </div>
+                <div id="test-questions-list" class="grid grid-cols-2 gap-x-6 gap-y-6 pt-1">
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Google Apps Script API 設定モーダル -->
+    <div id="api-config-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden no-print">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-slate-800 text-base">スプレッドシート連携設定</h3>
+                <button onclick="closeApiConfigModal()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+            </div>
+            <p class="text-xs text-slate-600 leading-relaxed">
+                Googleスプレッドシート（GAS）で発行した「ウェブアプリURL」を入力すると、全端末でデータを共有できます。
+            </p>
+            <div class="space-y-2">
+                <label class="block text-xs font-bold text-slate-700">GAS Web App URL</label>
+                <input type="url" id="gas-api-url-input" placeholder="https://script.google.com/macros/s/.../exec" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeApiConfigModal()" class="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition">キャンセル</button>
+                <button onclick="saveApiUrlSetting()" class="px-4 py-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shadow-sm">保存して同期する</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初期サンプルデータ（30語）
+        const defaultKanjiList = [
+            { kanji: "感想", reading: "かんそう" },
+            { kanji: "写真", reading: "しゃしん" },
+            { kanji: "列車", reading: "れっしゃ" },
+            { kanji: "血", reading: "ち" },
+            { kanji: "暗い", reading: "くらい" },
+            { kanji: "橋", reading: "はし" },
+            { kanji: "暑い", reading: "あつい" },
+            { kanji: "寒い", reading: "さむい" },
+            { kanji: "写る", reading: "うつる" },
+            { kanji: "真夏", reading: "まなつ" },
+            { kanji: "軽い", reading: "かるい" },
+            { kanji: "命", reading: "いのち" },
+            { kanji: "第一", reading: "だいいち" },
+            { kanji: "読み返す", reading: "よみかえす" },
+            { kanji: "主語", reading: "しゅご" },
+            { kanji: "九州", reading: "きゅうしゅう" },
+            { kanji: "洋服", reading: "ようふく" },
+            { kanji: "公園", reading: "こうえん" },
+            { kanji: "目的", reading: "もくてき" },
+            { kanji: "広場", reading: "ひろば" },
+            { kanji: "緑色", reading: "みどりいろ" },
+            { kanji: "道具", reading: "どうぐ" },
+            { kanji: "太陽", reading: "たいよう" },
+            { kanji: "計画", reading: "けいかく" },
+            { kanji: "完成", reading: "かんせい" },
+            { kanji: "質問", reading: "しつもん" },
+            { kanji: "意見", reading: "いけん" },
+            { kanji: "記録", reading: "きろく" },
+            { kanji: "練習", reading: "れんしゅう" },
+            { kanji: "合格", reading: "ごうかく" }
+        ];
+
+        let currentKanjiList = [...defaultKanjiList];
+        let selectedTestList = [];
+        let savedSetsList = [];
+        let activeGradeFilter = 'ALL';
+        let currentTab = 'practice';
+        let gasApiUrl = localStorage.getItem('kanji_generator_gas_url') || "";
+
+        window.onload = function() {
+            updateApiStatusBadge();
+            updateBulkTextarea();
+            renderPracticePrint();
+            generateRandomTest();
+
+            if (gasApiUrl) {
+                fetchCloudData();
+            } else {
+                loadLocalSavedSets();
+                refreshSavedListUI();
+            }
+        };
+
+        // トースト通知を表示
+        function showNotification(msg) {
+            const toast = document.getElementById('toast');
+            const messageEl = document.getElementById('toast-message');
+            messageEl.textContent = msg;
+            toast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-[-10px]');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-[-10px]');
+            }, 3000);
+        }
+
+        // GAS API設定モーダル
+        function openApiConfigModal() {
+            document.getElementById('gas-api-url-input').value = gasApiUrl;
+            document.getElementById('api-config-modal').classList.remove('hidden');
+        }
+
+        function closeApiConfigModal() {
+            document.getElementById('api-config-modal').classList.add('hidden');
+        }
+
+        function saveApiUrlSetting() {
+            const url = document.getElementById('gas-api-url-input').value.trim();
+            gasApiUrl = url;
+            localStorage.setItem('kanji_generator_gas_url', gasApiUrl);
+            closeApiConfigModal();
+            updateApiStatusBadge();
+            
+            if (gasApiUrl) {
+                fetchCloudData();
+            } else {
+                showNotification('ローカル保存モードに変更しました。');
+            }
+        }
+
+        function updateApiStatusBadge() {
+            const badge = document.getElementById('sync-status-badge');
+            if (gasApiUrl) {
+                badge.textContent = "クラウド同期: 有効";
+                badge.className = "text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full inline-block mt-0.5";
+            } else {
+                badge.textContent = "クラウド同期: 未設定 (ローカル)";
+                badge.className = "text-[10px] bg-amber-600 text-white px-2 py-0.5 rounded-full inline-block mt-0.5";
+            }
+        }
+
+        // クラウド（Googleスプレッドシート）からデータ一覧を取得
+        async function fetchCloudData() {
+            if (!gasApiUrl) return;
+            showNotification('クラウドからデータを取得中...');
+
+            try {
+                const response = await fetch(gasApiUrl + '?action=list', {
+                    method: 'GET',
+                    redirect: 'follow'
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    savedSetsList = result.data || [];
+                    refreshSavedListUI();
+                    showNotification('最新データを読み込みました！');
+                } else {
+                    showNotification('データ取得失敗: ' + (result.message || '不明なエラー'));
+                }
+            } catch (error) {
+                console.error(error);
+                showNotification('クラウド通信エラー。GASのWeb App設定（全員にアクセス権を許可）を確認してください。');
+            }
+        }
+
+        // ローカルストレージ（バックアップ/非接続時）
+        function loadLocalSavedSets() {
+            try {
+                const stored = localStorage.getItem('kanji_generator_saved_sets');
+                if (stored) savedSetsList = JSON.parse(stored);
+            } catch (e) {
+                savedSetsList = [];
+            }
+        }
+
+        function saveLocalSavedSets() {
+            localStorage.setItem('kanji_generator_saved_sets', JSON.stringify(savedSetsList));
+        }
+
+        // 新規保存
+        async function saveCurrentKanjiSet() {
+            const gradeSelect = document.getElementById('save-grade-select');
+            const titleInput = document.getElementById('save-title-input');
+            const grade = gradeSelect.value;
+            const title = titleInput.value.trim();
+
+            if (!title) {
+                showNotification('プリント名を入力してください。');
+                return;
+            }
+
+            if (currentKanjiList.length === 0) {
+                showNotification('漢字データが空です。');
+                return;
+            }
+
+            const uniqueId = `set_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+            const newSet = {
+                id: uniqueId,
+                grade: grade,
+                title: title,
+                list: currentKanjiList
+            };
+
+            if (gasApiUrl) {
+                showNotification('クラウドへ保存中...');
+                try {
+                    // GASへのPOST送信時のCORSプリフライト回避のため text/plain で送信
+                    const response = await fetch(gasApiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'text/plain;charset=utf-8'
+                        },
+                        body: JSON.stringify({ action: 'save', payload: newSet }),
+                        redirect: 'follow'
+                    });
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        titleInput.value = '';
+                        
+                        // クラウドから最新を取得、または返却データを直接反映
+                        if (result.data && Array.isArray(result.data)) {
+                            savedSetsList = result.data;
+                        } else {
+                            // リストにローカルで追加
+                            const existingIdx = savedSetsList.findIndex(s => String(s.id) === String(uniqueId));
+                            if (existingIdx !== -1) {
+                                savedSetsList[existingIdx] = newSet;
+                            } else {
+                                savedSetsList.push(newSet);
+                            }
+                        }
+
+                        // 保存した学年フィルターに自動切り替えてプルダウンを即更新
+                        filterGrade(grade);
+                        refreshSavedListUI(uniqueId);
+                        
+                        // 最新全件の非同期再取得もバックグラウンドで実行
+                        fetchCloudDataSilently();
+                        
+                        showNotification(`【${grade}】「${title}」をクラウドに保存しました！`);
+                    } else {
+                        showNotification('保存エラー: ' + (result.message || 'エラーが発生しました'));
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showNotification('通信エラー。保存できませんでした。（GASのデプロイ設定をご確認ください）');
+                }
+            } else {
+                savedSetsList.push(newSet);
+                saveLocalSavedSets();
+                titleInput.value = '';
+                filterGrade(grade);
+                refreshSavedListUI(uniqueId);
+                showNotification(`【${grade}】「${title}」をローカルに保存しました！`);
+            }
+        }
+
+        // バックグラウンドでクラウドデータを再取得するヘルパー
+        async function fetchCloudDataSilently() {
+            if (!gasApiUrl) return;
+            try {
+                const response = await fetch(gasApiUrl + '?action=list', {
+                    method: 'GET',
+                    redirect: 'follow'
+                });
+                const result = await response.json();
+                if (result.status === 'success' && Array.isArray(result.data)) {
+                    savedSetsList = result.data;
+                    const select = document.getElementById('saved-kanji-select');
+                    const selectedVal = select ? select.value : null;
+                    refreshSavedListUI(selectedVal);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // 保存プリントの読み込み
+        function loadSelectedKanjiSet() {
+            const select = document.getElementById('saved-kanji-select');
+            const selectedId = select.value;
+            if (!selectedId) {
+                showNotification('読み込むプリントを選択してください。');
+                return;
+            }
+
+            // IDを文字列比較で確実に一致判定
+            const targetSet = savedSetsList.find(s => String(s.id) === String(selectedId));
+            
+            if (targetSet) {
+                // GAS等のレスポンス形式の違い（JSON文字列の場合）をパース処理
+                let listToLoad = targetSet.list;
+                if (typeof listToLoad === 'string') {
+                    try {
+                        listToLoad = JSON.parse(listToLoad);
+                    } catch (e) {
+                        console.error('リストのパースエラー:', e);
+                    }
+                }
+
+                if (Array.isArray(listToLoad) && listToLoad.length > 0) {
+                    currentKanjiList = [...listToLoad];
+                    updateBulkTextarea();
+                    renderPracticePrint();
+                    generateRandomTest();
+                    
+                    // 学年・タイトルの入力欄にもセット名を反映
+                    if (targetSet.grade) {
+                        const gradeSelect = document.getElementById('save-grade-select');
+                        if (gradeSelect) gradeSelect.value = targetSet.grade;
+                    }
+                    if (targetSet.title) {
+                        const titleInput = document.getElementById('save-title-input');
+                        if (titleInput) titleInput.value = targetSet.title;
+                    }
+
+                    showNotification(`「${targetSet.title || 'プリント'}」を呼び出しました！`);
+                } else {
+                    showNotification('選択したプリントの漢字データが正しくありません。');
+                }
+            } else {
+                showNotification('データが見つかりませんでした。最新データを取得してください。');
+            }
+        }
+
+        // 保存プリントの削除
+        async function deleteSelectedKanjiSet() {
+            const select = document.getElementById('saved-kanji-select');
+            const selectedId = select.value;
+            if (!selectedId) return;
+
+            if (gasApiUrl) {
+                showNotification('クラウドから削除中...');
+                try {
+                    const response = await fetch(gasApiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'text/plain;charset=utf-8'
+                        },
+                        body: JSON.stringify({ action: 'delete', id: selectedId }),
+                        redirect: 'follow'
+                    });
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        await fetchCloudData();
+                        showNotification('削除が完了しました。');
+                    } else {
+                        showNotification('削除エラー: ' + (result.message || 'エラーが発生しました'));
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showNotification('通信エラー。削除できませんでした。');
+                }
+            } else {
+                const index = savedSetsList.findIndex(s => s.id === selectedId);
+                if (index !== -1) {
+                    savedSetsList.splice(index, 1);
+                    saveLocalSavedSets();
+                    refreshSavedListUI();
+                    showNotification('削除しました。');
+                }
+            }
+        }
+
+        // タブ切り替え
+        function switchTab(tab) {
+            currentTab = tab;
+            const pBtn = document.getElementById('tab-practice-btn');
+            const tBtn = document.getElementById('tab-test-btn');
+            const pPanel = document.getElementById('panel-practice');
+            const tPanel = document.getElementById('panel-test');
+            const pPreview = document.getElementById('preview-practice');
+            const tPreview = document.getElementById('preview-test');
+
+            if (tab === 'practice') {
+                pBtn.className = "flex-1 py-2 rounded-lg bg-indigo-600 text-white transition text-center";
+                tBtn.className = "flex-1 py-2 rounded-lg text-slate-600 hover:bg-slate-100 transition text-center";
+                pPanel.classList.remove('hidden');
+                tPanel.classList.add('hidden');
+                pPreview.classList.remove('hidden');
+                tPreview.classList.add('hidden');
+            } else {
+                tBtn.className = "flex-1 py-2 rounded-lg bg-indigo-600 text-white transition text-center";
+                pBtn.className = "flex-1 py-2 rounded-lg text-slate-600 hover:bg-slate-100 transition text-center";
+                tPanel.classList.remove('hidden');
+                pPanel.classList.add('hidden');
+                tPreview.classList.remove('hidden');
+                pPreview.classList.add('hidden');
+            }
+        }
+
+        // 学年フィルター切り替え
+        function filterGrade(grade) {
+            activeGradeFilter = grade;
+            const buttons = document.querySelectorAll('#grade-filter-tabs button');
+            buttons.forEach(btn => {
+                const text = btn.textContent;
+                const isSelected = (grade === 'ALL' && text === 'すべて') || 
+                                   (grade !== 'ALL' && text.includes(grade.replace('年生', '')));
+                btn.className = isSelected 
+                    ? "grade-tab-btn px-2 py-0.5 rounded bg-indigo-600 text-white font-bold transition"
+                    : "grade-tab-btn px-1.5 py-0.5 rounded text-slate-600 hover:bg-slate-300 transition";
+            });
+            refreshSavedListUI();
+        }
+
+        // 保存リストUIの描画
+        function refreshSavedListUI(selectedIdToKeep = null) {
+            const select = document.getElementById('saved-kanji-select');
+            const badge = document.getElementById('total-saved-badge');
+
+            const filteredList = activeGradeFilter === 'ALL' 
+                ? savedSetsList 
+                : savedSetsList.filter(s => s.grade === activeGradeFilter);
+
+            if (badge) badge.textContent = `全${savedSetsList.length}件`;
+
+            select.innerHTML = '';
+            if (filteredList.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = "";
+                opt.textContent = "保存データなし";
+                select.appendChild(opt);
+                return;
+            }
+
+            filteredList.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                opt.textContent = `[${item.grade}] ${item.title}`;
+                if (selectedIdToKeep && item.id === selectedIdToKeep) {
+                    opt.selected = true;
+                }
+                select.appendChild(opt);
+            });
+        }
+
+        // テキストエリアから配列を更新
+        function parseBulkInput() {
+            const text = document.getElementById('bulk-input').value;
+            const lines = text.split('\n');
+            const newList = [];
+
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed) return;
+                const parts = trimmed.split(/[,,\t]/);
+                if (parts.length >= 2) {
+                    newList.push({
+                        kanji: parts[0].trim(),
+                        reading: parts[1].trim()
+                    });
+                }
+            });
+
+            currentKanjiList = newList;
+            document.getElementById('data-count-badge').textContent = `${newList.length}問中 ${Math.min(newList.length, 30)}問`;
+            renderPracticePrint();
+            generateRandomTest();
+        }
+
+        // 現在のリストをテキストエリアに反映
+        function updateBulkTextarea() {
+            const text = currentKanjiList.map(item => `${item.kanji},${item.reading}`).join('\n');
+            document.getElementById('bulk-input').value = text;
+            document.getElementById('data-count-badge').textContent = `${currentKanjiList.length}問中 ${Math.min(currentKanjiList.length, 30)}問`;
+        }
+
+        // ランダムシャッフル
+        function shuffleKanji() {
+            for (let i = currentKanjiList.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [currentKanjiList[i], currentKanjiList[j]] = [currentKanjiList[j], currentKanjiList[i]];
+            }
+            updateBulkTextarea();
+            renderPracticePrint();
+            generateRandomTest();
+            showNotification('漢字の並び順をシャッフルしました！');
+        }
+
+        // 練習プリントの描画
+        function renderPracticePrint() {
+            const page1El = document.getElementById('practice-page-1');
+            const page2El = document.getElementById('practice-page-2');
+            page1El.innerHTML = '';
+            page2El.innerHTML = '';
+
+            for (let i = 0; i < 30; i++) {
+                const item = currentKanjiList[i] || { kanji: "", reading: "" };
+                const rowHtml = `
+                    <div class="grid grid-cols-12 items-center h-14 text-center text-slate-900">
+                        <div class="col-span-1 font-bold text-sm border-r-[1.5px] border-slate-800 bg-slate-50 flex items-center justify-center h-full">${i + 1}</div>
+                        <div class="col-span-2 kanji-cell border-r-[1.5px] border-slate-800 flex items-center justify-center h-full px-1 text-slate-900 overflow-hidden whitespace-nowrap">${item.kanji}</div>
+                        <div class="col-span-2 font-bold text-xs border-r-[1.5px] border-slate-800 flex items-center justify-center h-full px-1 text-slate-900">${item.reading}</div>
+                        <div class="col-span-7 grid grid-cols-3 h-full divide-x-[1.5px] divide-slate-800">
+                            <div class="practice-grid-cell h-full flex items-center justify-center font-bold text-slate-300"></div>
+                            <div class="practice-grid-cell h-full flex items-center justify-center font-bold text-slate-300"></div>
+                            <div class="practice-grid-cell h-full flex items-center justify-center font-bold text-slate-300"></div>
+                        </div>
+                    </div>
+                `;
+
+                if (i < 15) {
+                    page1El.innerHTML += rowHtml;
+                } else {
+                    page2El.innerHTML += rowHtml;
+                }
+            }
+        }
+
+        // 10問テストの選出
+        function generateRandomTest() {
+            if (currentKanjiList.length === 0) {
+                selectedTestList = [];
+                renderTest();
+                return;
+            }
+
+            const copy = [...currentKanjiList];
+            for (let i = copy.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [copy[i], copy[j]] = [copy[j], copy[i]];
+            }
+
+            selectedTestList = copy.slice(0, 10);
+            renderTest();
+        }
+
+        // テストの描画
+        function renderTest() {
+            const listEl = document.getElementById('test-questions-list');
+            const testType = document.getElementById('test-type').value;
+            const subtitleEl = document.getElementById('test-subtitle');
+            listEl.innerHTML = '';
+
+            if (testType === 'write') {
+                subtitleEl.textContent = "※ひらがなを見て、かん字をかきましょう。";
+            } else {
+                subtitleEl.textContent = "※かん字を見て、ひらがなで読みをかきましょう。";
+            }
+
+            for (let i = 0; i < 10; i++) {
+                const item = selectedTestList[i] || { kanji: "（無）", reading: "（なし）" };
+                
+                let qHtml = '';
+                if (testType === 'write') {
+                    qHtml = `
+                        <div class="border-[1.5px] border-slate-800 p-3 rounded-lg flex items-center justify-between bg-white shadow-sm">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-slate-800 text-sm min-w-[24px]">(${i + 1})</span>
+                                <span class="font-bold text-base text-slate-900">${item.reading}</span>
+                            </div>
+                            <div class="w-48 h-24 border-[2px] border-slate-900 rounded flex items-center justify-center"></div>
+                        </div>
+                    `;
+                } else {
+                    qHtml = `
+                        <div class="border-[1.5px] border-slate-800 p-3 rounded-lg flex items-center justify-between bg-white shadow-sm">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-slate-800 text-sm min-w-[24px]">(${i + 1})</span>
+                                <span class="kanji-cell text-2xl text-slate-900">${item.kanji}</span>
+                            </div>
+                            <div class="w-48 border-b-[2.5px] border-slate-900 h-16 flex items-center justify-center"></div>
+                        </div>
+                    `;
+                }
+                listEl.innerHTML += qHtml;
+            }
+        }
+
+        // PDFのダウンロード
+        function downloadPDF() {
+            const element = currentTab === 'practice' 
+                ? document.getElementById('preview-practice') 
+                : document.getElementById('preview-test');
+            
+            showNotification('PDFを生成中...');
+            
+            const opt = {
+                margin:       [5, 5, 5, 5],
+                filename:     currentTab === 'practice' ? 'kanji_practice.pdf' : 'kanji_test.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2 },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                showNotification('PDFの保存が完了しました！');
+            }).catch(err => {
+                console.error(err);
+                showNotification('PDF出力エラーが発生しました。');
+            });
+        }
+    </script>
+</body>
+</html>
